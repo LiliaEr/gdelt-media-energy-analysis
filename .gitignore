@@ -1,0 +1,16 @@
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+.jupyter-runtime/
+.matplotlib-cache/
+reports/*
+!reports/event_sources.md
+!reports/figures/
+reports/figures/*
+!reports/figures/04_count_heatmap.png
+!reports/tables/
+reports/tables/*
+!reports/tables/*.csv
+archive/
+.review_work/
