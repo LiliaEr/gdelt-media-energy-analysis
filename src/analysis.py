@@ -40,7 +40,11 @@ def load_daily_data(path: str | Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
 
+    if frame.empty:
+        raise ValueError("The daily dataset is empty.")
     frame["date"] = pd.to_datetime(frame["date"], format="%d/%m/%Y", errors="raise")
+    if frame["date"].isna().any():
+        raise ValueError("The daily dataset contains missing dates.")
     numeric = frame[[f"{t}_{suffix}" for t in TOPICS for suffix in ("count", "tone")]]
     if not np.isfinite(numeric.to_numpy(dtype=float)).all():
         raise ValueError("Missing or non-finite numeric values")
@@ -54,10 +58,23 @@ def load_daily_data(path: str | Path) -> pd.DataFrame:
         raise ValueError("The daily dataset contains duplicate dates.")
     if (frame[[f"{t}_count" for t in TOPICS]] < 0).any().any():
         raise ValueError("Mention counts must be non-negative.")
+    expected = pd.date_range(frame["date"].min(), frame["date"].max(), freq="D")
+    if len(expected.difference(frame["date"])):
+        raise ValueError("The daily dataset contains missing days.")
     return frame
 
 
 def summarize_quality(frame: pd.DataFrame) -> DataQualitySummary:
+    if frame.empty:
+        return DataQualitySummary(
+            rows=0,
+            columns=len(frame.columns),
+            start_date=pd.NaT,
+            end_date=pd.NaT,
+            missing_days=0,
+            duplicate_dates=0,
+            missing_values=0,
+        )
     expected = pd.date_range(frame["date"].min(), frame["date"].max(), freq="D")
     return DataQualitySummary(
         rows=len(frame),
@@ -89,11 +106,7 @@ def benjamini_hochberg(p_values: pd.Series) -> pd.Series:
 
 
 def differenced_topic_correlations(frame: pd.DataFrame) -> pd.DataFrame:
-    """Spearman rho of daily changes; rank-regression HAC inference (approximate).
 
-    Ordinary independent-observation Spearman p-values are inappropriate here.
-    Two HAC bandwidths expose sensitivity to remaining serial dependence.
-    """
     rows = []
     for topic in TOPICS:
         pair = frame[[f"{topic}_count", f"{topic}_tone"]].diff().dropna()
@@ -112,6 +125,17 @@ def differenced_topic_correlations(frame: pd.DataFrame) -> pd.DataFrame:
     return result.sort_values("spearman_rho", key=abs, ascending=False).reset_index(drop=True)
 
 
+def _validate_event_design(sample: pd.DataFrame, design: pd.DataFrame) -> None:
+    if sample.empty or not (sample["post"] == 0).any() or not (sample["post"] == 1).any():
+        raise ValueError("Event window must contain observations before and after the event.")
+    if not np.isfinite(sample.iloc[:, 1].to_numpy(dtype=float)).all():
+        raise ValueError("Event outcome must contain only finite values.")
+    if np.linalg.matrix_rank(design.to_numpy()) != design.shape[1]:
+        raise ValueError("Event design is rank deficient.")
+    if len(sample) <= design.shape[1]:
+        raise ValueError("Event window has insufficient residual degrees of freedom.")
+
+
 def event_study_hac(
     frame: pd.DataFrame,
     outcome: str,
@@ -119,14 +143,11 @@ def event_study_hac(
     window_days: int = 60,
     hac_lags: int = 14,
 ) -> dict[str, float | int | str]:
-    """Estimate a local level/slope intervention on log counts with HAC errors.
 
-    This is an associational interrupted-time-series estimate, not a causal design.
-    """
     event = pd.Timestamp(event_date)
     sample = frame.loc[
-        frame["date"].between(event - pd.Timedelta(days=window_days),
-                              event + pd.Timedelta(days=window_days)),
+        frame["date"].between(event - pd.Timedelta(window_days, "D"),
+                              event + pd.Timedelta(window_days, "D")),
         ["date", outcome],
     ].copy()
     sample["t"] = (sample["date"] - event).dt.days.astype(float)
@@ -135,6 +156,9 @@ def event_study_hac(
     weekday = pd.get_dummies(sample["date"].dt.dayofweek, prefix="dow", drop_first=True, dtype=float)
     design = pd.concat([sample[["t", "post", "post_trend"]], weekday], axis=1)
     design = sm.add_constant(design, has_constant="add").astype(float)
+    _validate_event_design(sample, design)
+    if (sample[outcome] < 0).any():
+        raise ValueError("Event counts must be non-negative.")
     model = sm.OLS(np.log1p(sample[outcome].astype(float)), design).fit(
         cov_type="HAC", cov_kwds={"maxlags": hac_lags}
     )
@@ -162,8 +186,8 @@ def event_study_level_hac(
     """Local level/slope intervention for continuous outcomes such as AvgTone."""
     event = pd.Timestamp(event_date)
     sample = frame.loc[
-        frame["date"].between(event - pd.Timedelta(days=window_days),
-                              event + pd.Timedelta(days=window_days)),
+        frame["date"].between(event - pd.Timedelta(window_days, "D"),
+                              event + pd.Timedelta(window_days, "D")),
         ["date", outcome],
     ].dropna().copy()
     sample["t"] = (sample["date"] - event).dt.days.astype(float)
@@ -172,6 +196,7 @@ def event_study_level_hac(
     weekday = pd.get_dummies(sample["date"].dt.dayofweek, prefix="dow", drop_first=True, dtype=float)
     design = pd.concat([sample[["t", "post", "post_trend"]], weekday], axis=1)
     design = sm.add_constant(design, has_constant="add").astype(float)
+    _validate_event_design(sample, design)
     model = sm.OLS(sample[outcome].astype(float), design).fit(
         cov_type="HAC", cov_kwds={"maxlags": hac_lags}
     )

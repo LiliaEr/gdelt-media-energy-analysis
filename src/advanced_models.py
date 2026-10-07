@@ -25,6 +25,8 @@ def multi_event_distributed_lag(
     events: dict[str, str],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Joint dynamic regression with 0–7, 8–14 and 15–30 day event lag bins."""
+    if not events:
+        raise ValueError("At least one event must be provided.")
     work = frame[["date", outcome]].copy()
     work["y"] = np.log1p(work[outcome].astype(float))
     work["lag1"] = work["y"].shift(1)
@@ -82,6 +84,8 @@ def cop_event_time_model(
     cop_dates: dict[str, str],
 ) -> pd.DataFrame:
     """Full-series dynamic regression with pooled COP lead/lag indicators."""
+    if not cop_dates:
+        raise ValueError("At least one COP event date must be provided.")
     work = frame[["date", outcome]].copy()
     work["y"] = np.log1p(work[outcome].astype(float))
     work["lag1"] = work["y"].shift(1)
@@ -128,9 +132,9 @@ def cop_event_time_model(
 def var_changes_by_topic(frame: pd.DataFrame, max_lags: int = 14) -> pd.DataFrame:
     """Exploratory tone-to-count Granger tests on stationary first differences.
 
-    All topics use the same transformation; no unsupported I(1) classification.
-    AIC=0 is retained as no lagged model, rather than silently forced to one.
-    Residual whiteness and stability qualify, rather than hide, model failures.
+    Count and tone series are first-differenced for every topic.
+    When AIC selects zero lags, the Granger test is omitted.
+    Stability and residual whiteness tests determine the diagnostic status.
     """
     rows = []
     for topic in TOPICS:
@@ -138,8 +142,12 @@ def var_changes_by_topic(frame: pd.DataFrame, max_lags: int = 14) -> pd.DataFram
             "count": np.log1p(frame[f"{topic}_count"].astype(float)).diff(),
             "tone": frame[f"{topic}_tone"].astype(float).diff(),
         }).dropna().reset_index(drop=True)
-        p_count = float(adfuller(changes["count"], autolag="AIC")[1])
-        p_tone = float(adfuller(changes["tone"], autolag="AIC")[1])
+        try:
+            p_count = float(adfuller(changes["count"], autolag="AIC", result_object=False)[1])
+            p_tone = float(adfuller(changes["tone"], autolag="AIC", result_object=False)[1])
+        except TypeError:
+            p_count = float(adfuller(changes["count"], autolag="AIC")[1])
+            p_tone = float(adfuller(changes["tone"], autolag="AIC")[1])
         row = {"topic": topic, "adf_p_count_change": p_count,
                "adf_p_tone_change": p_tone, "lag": 0,
                "tone_to_count_p": np.nan, "stable": False,

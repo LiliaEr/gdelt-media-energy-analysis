@@ -1,35 +1,35 @@
-# Энергетика в новостях — GDELT, 2022–2024
+# Energy in the News — GDELT, 2022–2024
 
-**Лилия Ерофеевская · Python · анализ временных рядов**
+**Lilia Erofeevskaya · Python · time-series analysis**
 
-Проведено исследование изменения частоты и тональности шести энергетических тем: нефти и газа, ядерной и зелёной энергетики, климатической политики, санкций и конфликтов. Сравниваю общую динамику и изменения около крупных событий.
+This study examines changes in the frequency and tone of six energy-related topics: oil and gas, nuclear power, green energy, climate policy, sanctions, and conflict. It considers overall trends and changes around major events.
 
-## Посмотреть анализ
+## Explore the analysis
 
-**[Основной ноутбук с графиками и выводами](notebooks/gdelt_energy_media_analysis.ipynb)**
+**[Main notebook with charts and findings](notebooks/gdelt_energy_media_analysis.ipynb)**
 
-![Корреляции частоты энергетических тем](reports/figures/04_count_heatmap.png)
+![Correlations in energy topic frequency](reports/figures/04_count_heatmap.png)
 
-## Что получилось
+## Main findings
 
-- Частота зелёной энергетики и климатической политики тесно связана: Pearson r = **0.89**. Для их тональности связь слабее: **0.30**.
-- Вблизи 24 февраля 2022 года локальная модель выделяет рост конфликтного и санкционного счётчиков. Изменение санкционной тональности неубедительно.
-- Вокруг COP наиболее заметный положительный коэффициент относится к первой неделе саммита: **+18.7%** при учёте прошлых значений, тренда и сезонности.
-- H4 о предсказательной связи тональности и частоты остаётся открытой: VAR сохраняет зависимость в остатках, несмотря на небольшие p-value.
+- Green energy and climate policy are strongly correlated in frequency: Pearson’s r = **0.89**. Their tone correlation is weaker: **0.30**.
+- Around 24 February 2022, the local model identifies increases in the conflict and sanctions counts. The change in sanctions tone is not statistically significant.
+- Around COP summits, the largest positive coefficient corresponds to the first week: **+18.7%**, controlling for lagged values, trend, and seasonality.
+- H4, concerning the predictive relationship between tone and frequency, remains inconclusive: the daily VAR models retain residual dependence despite small p-values.
 
-Это наблюдательные связи в готовой выгрузке, не причинные эффекты и не измерение общественного мнения.
+These are observational associations in an existing data export. They do not establish causal effects or measure public opinion.
 
-## Данные и SQL
+## Data and SQL
 
-- [Дневные показатели](data/raw/gdelt_energy_daily.csv): 1 096 дней, 01.01.2022–31.12.2024; 13 колонок.
-- [Географическая агрегация](data/raw/country_article_counts.csv): счётчики записей о локациях, не гарантированно уникальных статей.
-- [SQL-скрипт](sql/gdelt_energy_unified.sql) 
+- [Daily indicators](data/raw/gdelt_energy_daily.csv): 1,096 days, 1 January 2022–31 December 2024; 13 columns.
+- [Geographic aggregation](data/raw/country_article_counts.csv): location-entry counts, not necessarily unique article counts.
+- [SQL script](sql/gdelt_energy_unified.sql).
 
-Темы пересекаются, общего объёма новостей за день нет. Словари санкций и конфликтов требуют проверки по исходным текстам. Ноутбук работает локально с уже полученными данными — доступ к BigQuery не нужен.
+Topics overlap, and total daily news volume is unavailable. The sanctions and conflict topic definitions require validation against source texts. The notebook uses local exports and does not require BigQuery access.
 
-## Как запустить
+## Running the project
 
-Python 3.11 или новее. Из корня проекта:
+Python 3.11 or later. From the project root:
 
 ```powershell
 python -m venv .venv
@@ -39,22 +39,23 @@ python -m pytest -q
 python scripts/run_notebook.py
 ```
 
-Ноутбук редактируется напрямую: `notebooks/gdelt_energy_media_analysis.ipynb` — единственный источник его текста и структуры. `run_notebook.py` выполняет все ячейки текущего ноутбука и сохраняет результаты. Графики и расчётные таблицы появляются в `reports/figures` и `reports/tables`; исходные CSV не меняются.
+On macOS or Linux, create the environment with `python3 -m venv .venv` and activate it with `source .venv/bin/activate`, then run the installation, test, and notebook commands above. In VS Code, select the kernel from this environment.
 
-## Структура
+The notebook is edited directly: `notebooks/gdelt_energy_media_analysis.ipynb` is the sole source of its text and structure. `run_notebook.py` executes every cell and saves the outputs. Figures and calculated tables are written to `reports/figures` and `reports/tables`; the raw CSV files are unchanged.
 
-| Путь | Содержание |
+## Project structure
+
+| Path | Contents |
 |---|---|
-| `notebooks/` | Основной анализ с сохранёнными результатами |
-| `data/raw/` | Два рабочих CSV |
-| `sql/` | SQL запрос |
-| `src/` | Проверки, корреляции и модели H1–H4 |
-| `scripts/` | Выполнение ноутбука |
-| `tests/` | Проверки данных и расчётных функций |
-| `reports/` | Источники дат, выбранные результаты и таблицы расчётов |
-| `archive/` | Локальные архивы; в GitHub не публикуются |
+| `notebooks/` | Main analysis with saved outputs |
+| `data/raw/` | Two input CSV files |
+| `sql/` | SQL queries |
+| `src/` | Validation, correlations, and H1–H4 models |
+| `scripts/` | Notebook execution |
+| `tests/` | Data and calculation checks |
+| `reports/` | Event date sources, selected figures, and calculated tables |
+| `archive/` | Local archives; excluded from publication on GitHub |
 
-## Проверка и ограничения
+## Validation and limitations
 
-[Источники дат событий](reports/event_sources.md)
-
+[Event date sources](reports/event_sources.md)

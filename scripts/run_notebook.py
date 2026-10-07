@@ -1,4 +1,3 @@
-"""Execute with the current Python interpreter; no global kernel install needed."""
 from pathlib import Path
 import json
 import os
